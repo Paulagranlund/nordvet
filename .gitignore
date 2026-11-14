@@ -12,3 +12,6 @@ data/
 heyra_case.html
 
 .DS_Store
+
+# Generated dashboard (rebuilt on every run)
+output/

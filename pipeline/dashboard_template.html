@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nordvet no-shows</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --series: #2a78d6; --series-wash: rgba(42,120,214,0.10); --reference: #898781;
+    --critical: #d03b3b; --serious: #ec835a; --warning: #fab219;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --series: #3987e5; --series-wash: rgba(57,135,229,0.12);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series: #3987e5; --series-wash: rgba(57,135,229,0.12);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .sub { color: var(--ink-2); margin: 0 0 14px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 18px; margin-top: 18px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 28px; font-weight: 600; margin-top: 2px; }
+  .tile .note { color: var(--muted); font-size: 12px; }
+  .tile.hero .value { font-size: 48px; line-height: 1.1; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2);
+           white-space: nowrap; margin-right: 8px; }
+  .badge i { font-style: normal; display: inline-grid; place-items: center; width: 16px; height: 16px;
+             border-radius: 50%; color: #fff; font-size: 10px; font-weight: 700; }
+  .badge.critical i { background: var(--critical); }
+  .badge.serious i { background: var(--serious); }
+  .badge.warning i { background: var(--warning); color: #0b0b0b; }
+  .attention li { margin: 6px 0; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--ink-2); font-weight: 600; font-size: 12px; background: var(--surface);
+       white-space: normal; vertical-align: bottom; line-height: 1.25; }
+  th, td { padding-left: 8px; padding-right: 8px; }
+  th:first-child, td:first-child { text-align: left; }
+  td.flags { text-align: left; white-space: normal; min-width: 130px; }
+  tr:hover td { background: var(--series-wash); }
+  .bars .row { display: grid; grid-template-columns: 190px 1fr; align-items: center; gap: 10px; height: 22px; }
+  .bars .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .bars .track { position: relative; height: 100%; }
+  .bars .bar { position: absolute; top: 5px; height: 12px; background: var(--series); border-radius: 0 4px 4px 0; }
+  .bars .val { position: absolute; top: 2px; font-size: 12px; color: var(--ink-2); padding-left: 6px;
+               white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .bars .val .badge { margin-right: 0; }
+  .bars .ref { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 1px solid var(--reference); }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .cols { display: flex; align-items: flex-end; gap: 14px; height: 180px; padding-top: 22px;
+          border-bottom: 1px solid var(--axis); }
+  .cols .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .cols .colbar { width: 24px; background: var(--series); border-radius: 4px 4px 0 0; }
+  .cols .v { font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .collabels { display: flex; gap: 14px; }
+  .collabels div { flex: 1; text-align: center; font-size: 12px; color: var(--ink-2); padding-top: 6px; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin: 6px 0 4px; }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; vertical-align: middle;
+                         margin-right: 6px; background: var(--series); }
+  .legend span.ref::before { background: var(--reference); }
+  select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--axis);
+           background: var(--surface); color: var(--ink); }
+  svg text { fill: var(--muted); font-size: 11px; }
+  #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); padding: 6px 9px;
+         border-radius: 6px; font-size: 12px; line-height: 1.4; display: none; z-index: 10; max-width: 260px; }
+  ul.notes { color: var(--ink-2); padding-left: 18px; margin: 6px 0 0; }
+  @media (max-width: 600px) { .bars .row { grid-template-columns: 120px 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Nordvet no-shows</h1>
+  <p class="sub" id="subtitle"></p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Needs attention</h2>
+    <ul class="attention" id="attention"></ul>
+  </section>
+
+  <section class="card">
+    <h2 id="morning-title">Last working day, per clinic</h2>
+    <p class="sub">Compared with each clinic's own normal (the 28 days before). "Still unresolved" are past
+      appointments with no outcome recorded yet. No-shows are typically recorded about a day late,
+      so these numbers can still go up.</p>
+    <div class="table-wrap"><table id="morning"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>No-show rate, last 4 weeks</h2>
+    <p class="sub">Share of expected visits (completed + no-shows) where nobody came. The grey line is the chain average.</p>
+    <div class="bars" id="ranking"></div>
+  </section>
+
+  <section class="card">
+    <h2>Weekly trend</h2>
+    <p class="sub">Pick a clinic to compare it with the chain average.
+      <select id="clinic-select" aria-label="Clinic"></select></p>
+    <div class="legend"><span id="legend-clinic">Clinic</span><span class="ref">Chain average</span></div>
+    <svg id="trend" viewBox="0 0 1000 260" width="100%" role="img" aria-label="Weekly no-show rate"></svg>
+  </section>
+
+  <section class="card">
+    <h2>What drives no-shows</h2>
+    <p class="sub">Whole period, all clinics.</p>
+    <div class="two">
+      <div><strong>By how far ahead it was booked</strong><div class="cols" id="lead"></div><div class="collabels" id="lead-l"></div></div>
+      <div><strong>By service</strong><div class="cols" id="service"></div><div class="collabels" id="service-l"></div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>How to read this</h2>
+    <ul class="notes">
+      <li><b>No-show rate</b> = no-shows ÷ (completed + no-shows). Cancellations are excluded (nobody was expected),
+        and so are appointments with no outcome yet.</li>
+      <li><b>Lost vet-hours</b> = booked minutes of no-show appointments. The data has no prices, so money
+        = vet-hours × your own value per vet-hour.</li>
+      <li><b>Cancelled after start</b>: cancelled after the appointment time. Shown separately, not counted as no-shows.</li>
+      <li>Deleted appointments are excluded. Days are clinic local time.</li>
+      <li>Flags: <span class="badge serious"><i>▲</i>Above normal</span> ≥ 2 no-shows and ≥ 8 points above the clinic's
+        28-day normal. <span class="badge critical"><i>!</i>Persistently high</span> 4-week rate ≥ 1.5× chain average.
+        <span class="badge warning"><i>↗</i>Getting worse</span> 4-week rate ≥ 5 points above the 4 weeks before.</li>
+    </ul>
+  </section>
+</main>
+<div id="tip"></div>
+
+<script>
+const D = __DATA__;
+const pct = (x, d = 1) => x == null ? "–" : (100 * x).toFixed(d) + "%";
+const num = x => x == null ? "–" : Math.round(x).toLocaleString("en");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const short = n => n.replace(/^Nordvet /, "");
+const fmtDate = s => new Date(s + "T12:00:00").toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long"});
+
+// ---------- tooltip ----------
+const tip = document.getElementById("tip");
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px";
+}
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest("[data-tip]");
+  if (t) showTip(e, t.dataset.tip); else if (!e.target.closest("#trend")) tip.style.display = "none";
+});
+
+// ---------- header + tiles ----------
+const M = D.morning.filter(r => r.appointments != null);
+const reportDate = D.morning[0]?.report_date;
+const sum = k => M.reduce((a, r) => a + (r[k] || 0), 0);
+const dayRate = sum("no_shows") / (sum("completed") + sum("no_shows"));
+const L = D.last_28d;
+const lsum = k => L.reduce((a, r) => a + (r[k] || 0), 0);
+document.getElementById("subtitle").textContent =
+  `Report for ${fmtDate(reportDate)} · data updated ${D.data_as_of} (Copenhagen time)`;
+document.getElementById("morning-title").textContent = `${fmtDate(reportDate)}, per clinic`;
+const tiles = [
+  {label: "No-show rate, last working day", value: pct(dayRate), note: `Provisional · last 4 weeks: ${pct(L[0]?.chain_rate)}`, hero: true},
+  {label: "No-shows", value: num(sum("no_shows")), note: `${num(sum("lost_vet_hours"))} vet-hours lost`},
+  {label: "Still unresolved", value: num(sum("unresolved")), note: "may still become no-shows"},
+  {label: "Lost vet-hours, last 4 weeks", value: num(lsum("lost_vet_hours")), note: `${num(lsum("no_shows"))} no-shows`},
+];
+document.getElementById("tiles").innerHTML = tiles.map(t =>
+  `<div class="tile${t.hero ? " hero" : ""}"><div class="label">${t.label}</div>
+   <div class="value">${t.value}</div><div class="note">${t.note}</div></div>`).join("");
+
+// ---------- flags ----------
+const badge = {
+  above: `<span class="badge serious"><i>▲</i>Above normal</span>`,
+  high: `<span class="badge critical"><i>!</i>Persistently high</span>`,
+  worse: `<span class="badge warning"><i>↗</i>Getting worse</span>`,
+};
+const L28 = Object.fromEntries(L.map(r => [r.clinic_name, r]));
+// includeDay = also show the one-day "Above normal" flag (morning table only)
+const flagsFor = (name, includeDay = true) => {
+  const m = D.morning.find(r => r.clinic_name === name) || {}, l = L28[name] || {};
+  return (includeDay && m.is_above_normal ? badge.above : "") + (l.is_persistently_high ? badge.high : "") + (l.is_getting_worse ? badge.worse : "");
+};
+
+// ---------- needs attention ----------
+const att = [];
+L.filter(r => r.is_getting_worse).forEach(r => att.push(`${badge.worse}<b>${esc(short(r.clinic_name))}</b>: ${pct(r.no_show_rate)} in the last 4 weeks, up from ${pct(r.no_show_rate_prior_28d)} the 4 weeks before.`));
+D.morning.filter(r => r.is_above_normal).forEach(r => att.push(`${badge.above}<b>${esc(short(r.clinic_name))}</b>: ${r.no_shows} no-shows (${pct(r.no_show_rate)}) vs a normal of ${pct(r.no_show_rate_prev_28d)}.`));
+const high = L.filter(r => r.is_persistently_high);
+if (high.length) att.push(`${badge.high}<b>${high.map(r => esc(short(r.clinic_name))).join(", ")}</b>: at least 1.5× the chain average over the last 4 weeks, together ${num(high.reduce((a, r) => a + r.lost_vet_hours, 0))} lost vet-hours.`);
+document.getElementById("attention").innerHTML = att.length ? att.map(a => `<li>${a}</li>`).join("") : "<li>Nothing flagged.</li>";
+
+// ---------- morning table ----------
+const cols = [["Clinic", r => esc(short(r.clinic_name))], ["Appointments", r => num(r.appointments)],
+  ["Completed", r => num(r.completed)], ["No-shows", r => num(r.no_shows)], ["Cancelled", r => num(r.cancelled)],
+  ["Cancelled after start", r => num(r.cancelled_after_start)], ["Still unresolved", r => num(r.unresolved)],
+  ["No-show rate", r => pct(r.no_show_rate)], ["Normal (28 d)", r => pct(r.no_show_rate_prev_28d)],
+  ["Lost vet-hours", r => r.lost_vet_hours == null ? "–" : r.lost_vet_hours.toFixed(1)], ["", r => flagsFor(r.clinic_name)]];
+document.getElementById("morning").innerHTML =
+  `<thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>` +
+  D.morning.map(r => `<tr>${cols.map((c, i) => `<td${i === cols.length - 1 ? ' class="flags"' : ""}>${c[1](r)}</td>`).join("")}</tr>`).join("") +
+  "</tbody>";
+
+// ---------- ranking bars ----------
+const maxRate = Math.ceil(Math.max(...L.map(r => r.no_show_rate)) * 20) / 20;  // round up to 5%
+const chain = L[0]?.chain_rate;
+document.getElementById("ranking").innerHTML = L.map(r => {
+  const w = 85 * r.no_show_rate / maxRate;
+  const t = `<b>${esc(r.clinic_name)}</b><br>Last 4 weeks: ${pct(r.no_show_rate)} (${r.no_shows} of ${r.expected})<br>4 weeks before: ${pct(r.no_show_rate_prior_28d)}<br>Lost vet-hours: ${r.lost_vet_hours}`;
+  return `<div class="row" data-tip="${esc(t)}"><div class="name">${esc(short(r.clinic_name))}</div>
+    <div class="track"><div class="bar" style="width:${w}%"></div>
+    <div class="val" style="left:${w}%">${pct(r.no_show_rate)} ${flagsFor(r.clinic_name, false)}</div>
+    <div class="ref" style="left:${85 * chain / maxRate}%"></div></div></div>`;
+}).join("");
+
+// ---------- weekly trend (line chart) ----------
+const weeks = [...new Set(D.weekly.map(r => r.week))].sort();
+const chainWeekly = weeks.map(w => {
+  const rs = D.weekly.filter(r => r.week === w);
+  return rs.reduce((a, r) => a + r.no_shows, 0) / rs.reduce((a, r) => a + r.expected, 0);
+});
+const sel = document.getElementById("clinic-select");
+const clinics = L.map(r => r.clinic_name).sort((a, b) => a.localeCompare(b));
+sel.innerHTML = clinics.map(n => `<option>${esc(n)}</option>`).join("");
+sel.value = (L.find(r => r.is_getting_worse) || L[0]).clinic_name;  // start on the most interesting clinic
+const svg = document.getElementById("trend");
+function drawTrend() {
+  const name = sel.value;
+  document.getElementById("legend-clinic").textContent = short(name);
+  const series = weeks.map(w => {
+    const r = D.weekly.find(x => x.week === w && x.clinic_name === name);
+    return r && r.expected ? {rate: r.no_shows / r.expected, n: r.expected, ns: r.no_shows} : null;
+  });
+  const W = 1000, H = 260, pl = 44, pr = 16, pt = 12, pb = 28;
+  const ymax = Math.max(0.1, Math.ceil(Math.max(...series.map(s => s?.rate || 0), ...chainWeekly) * 20) / 20);
+  const x = i => pl + i * (W - pl - pr) / Math.max(1, weeks.length - 1);
+  const y = v => pt + (1 - v / ymax) * (H - pt - pb);
+  let g = "";
+  for (let v = 0; v <= ymax + 1e-9; v += 0.05) {
+    g += `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>` +
+         `<text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v * 100)}%</text>`;
+  }
+  weeks.forEach((w, i) => { if (i % 2 === 0) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${new Date(w).toLocaleDateString("en-GB", {day: "numeric", month: "short"})}</text>`; });
+  const path = pts => pts.map((p, i) => p == null ? "" : `${i && pts[i - 1] != null ? "L" : "M"}${x(i)},${y(p)}`).join("");
+  g += `<path d="${path(chainWeekly)}" fill="none" stroke="var(--reference)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g += `<path d="${path(series.map(s => s?.rate ?? null))}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const last = series.length - 1;
+  if (series[last]) g += `<circle cx="${x(last)}" cy="${y(series[last].rate)}" r="4.5" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>`;
+  g += `<line id="cross" y1="${pt}" y2="${H - pb}" stroke="var(--axis)" visibility="hidden"/>`;
+  g += `<rect x="${pl}" y="0" width="${W - pl - pr}" height="${H}" fill="transparent" id="hit"/>`;
+  svg.innerHTML = g;
+  const hit = svg.querySelector("#hit"), cross = svg.querySelector("#cross");
+  hit.addEventListener("mousemove", e => {
+    const b = svg.getBoundingClientRect();
+    const px = (e.clientX - b.left) * W / b.width;
+    const i = Math.max(0, Math.min(weeks.length - 1, Math.round((px - pl) / ((W - pl - pr) / Math.max(1, weeks.length - 1)))));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    const s = series[i];
+    showTip(e, `<b>Week of ${new Date(weeks[i]).toLocaleDateString("en-GB", {day: "numeric", month: "short"})}</b><br>` +
+      `${esc(short(name))}: ${s ? pct(s.rate) + ` (${s.ns} of ${s.n})` : "–"}<br>Chain average: ${pct(chainWeekly[i])}`);
+  });
+  hit.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); tip.style.display = "none"; });
+}
+sel.addEventListener("change", drawTrend);
+drawTrend();
+
+// ---------- driver columns ----------
+function columns(id, data, label) {
+  const max = Math.max(...data.map(d => d.rate));
+  document.getElementById(id).innerHTML = data.map(d => {
+    const t = `<b>${esc(label(d))}</b><br>No-show rate: ${pct(d.rate)}<br>${num(d.n)} expected visits` +
+              (d.lost_vet_hours != null ? `<br>Lost vet-hours: ${num(d.lost_vet_hours)}` : "");
+    return `<div class="col" data-tip="${esc(t)}"><div class="v">${pct(d.rate)}</div>
+            <div class="colbar" style="height:${85 * d.rate / max}%"></div></div>`;
+  }).join("");
+  document.getElementById(id + "-l").innerHTML = data.map(d => `<div>${esc(label(d))}</div>`).join("");
+}
+columns("lead", D.by_lead_time, d => d.label);
+columns("service", D.by_service, d => d.label.replace("_", "-").replace(/^./, c => c.toUpperCase()));
+</script>
+</body>
+</html>
