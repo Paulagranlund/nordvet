@@ -42,6 +42,10 @@
   .tile .value { font-size: 28px; font-weight: 600; margin-top: 2px; }
   .tile .note { color: var(--muted); font-size: 12px; }
   .tile.hero .value { font-size: 48px; line-height: 1.1; }
+  h2.group { font-size: 15px; margin: 22px 0 8px; }
+  h2.group:first-of-type { margin-top: 8px; }
+  .notfinal { color: var(--ink-2); font-size: 13px; margin: 8px 0 0; }
+  .notfinal b { color: var(--ink); }
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2);
            white-space: nowrap; margin-right: 8px; }
   .badge i { font-style: normal; display: inline-grid; place-items: center; width: 16px; height: 16px;
@@ -93,7 +97,11 @@
   <h1>Nordvet no-shows</h1>
   <p class="sub" id="subtitle"></p>
 
-  <div class="tiles" id="tiles"></div>
+  <h2 class="group" id="day-heading">Last working day</h2>
+  <div class="tiles" id="tiles-day"></div>
+  <p class="notfinal" id="notfinal"></p>
+  <h2 class="group">Last 4 weeks, all clinics</h2>
+  <div class="tiles" id="tiles-28d"></div>
 
   <section class="card">
     <h2>Needs attention</h2>
@@ -102,9 +110,8 @@
 
   <section class="card">
     <h2 id="morning-title">Last working day, per clinic</h2>
-    <p class="sub">Compared with each clinic's own normal (the 28 days before). "Still unresolved" are past
-      appointments with no outcome recorded yet. No-shows are typically recorded about a day late,
-      so these numbers can still go up.</p>
+    <p class="sub">"Usual level" is the clinic's own no-show rate over the 28 days before. "No outcome yet" are
+      past appointments still marked as booked: some will become no-shows, so these numbers can still go up.</p>
     <div class="table-wrap"><table id="morning"></table></div>
   </section>
 
@@ -178,15 +185,24 @@ const lsum = k => L.reduce((a, r) => a + (r[k] || 0), 0);
 document.getElementById("subtitle").textContent =
   `Report for ${fmtDate(reportDate)} · data updated ${D.data_as_of} (Copenhagen time)`;
 document.getElementById("morning-title").textContent = `${fmtDate(reportDate)}, per clinic`;
-const tiles = [
-  {label: "No-show rate, last working day", value: pct(dayRate), note: `Provisional · last 4 weeks: ${pct(L[0]?.chain_rate)}`, hero: true},
-  {label: "No-shows", value: num(sum("no_shows")), note: `${num(sum("lost_vet_hours"))} vet-hours lost`},
-  {label: "Still unresolved", value: num(sum("unresolved")), note: "may still become no-shows"},
-  {label: "Lost vet-hours, last 4 weeks", value: num(lsum("lost_vet_hours")), note: `${num(lsum("no_shows"))} no-shows`},
-];
-document.getElementById("tiles").innerHTML = tiles.map(t =>
+const tileHtml = ts => ts.map(t =>
   `<div class="tile${t.hero ? " hero" : ""}"><div class="label">${t.label}</div>
    <div class="value">${t.value}</div><div class="note">${t.note}</div></div>`).join("");
+const dayExpected = sum("completed") + sum("no_shows");
+document.getElementById("day-heading").textContent = `${fmtDate(reportDate)} (last working day), all clinics`;
+document.getElementById("tiles-day").innerHTML = tileHtml([
+  {label: "No-show rate", value: pct(dayRate), note: `Usual level: ${pct(L[0]?.chain_rate)} (last 4 weeks)`, hero: true},
+  {label: "No-shows", value: num(sum("no_shows")), note: `out of ${num(dayExpected)} expected visits`},
+  {label: "Vet-hours lost", value: num(sum("lost_vet_hours")), note: "booked time where nobody came"},
+  {label: "Outcome not recorded yet", value: num(sum("unresolved")), note: "past appointments still marked as booked"},
+]);
+document.getElementById("notfinal").innerHTML = sum("unresolved") > 0
+  ? `<b>Not final yet:</b> clinics usually record no-shows about a day late. Some of the ${num(sum("unresolved"))} appointments without an outcome will become no-shows, so these numbers can still go up.`
+  : "All appointments have an outcome recorded. These numbers are final.";
+document.getElementById("tiles-28d").innerHTML = tileHtml([
+  {label: "No-show rate", value: pct(L[0]?.chain_rate), note: `${num(lsum("no_shows"))} no-shows out of ${num(lsum("expected"))} expected visits`},
+  {label: "Vet-hours lost", value: num(lsum("lost_vet_hours")), note: "booked time where nobody came"},
+]);
 
 // ---------- flags ----------
 const badge = {
@@ -212,8 +228,8 @@ document.getElementById("attention").innerHTML = att.length ? att.map(a => `<li>
 // ---------- morning table ----------
 const cols = [["Clinic", r => esc(short(r.clinic_name))], ["Appointments", r => num(r.appointments)],
   ["Completed", r => num(r.completed)], ["No-shows", r => num(r.no_shows)], ["Cancelled", r => num(r.cancelled)],
-  ["Cancelled after start", r => num(r.cancelled_after_start)], ["Still unresolved", r => num(r.unresolved)],
-  ["No-show rate", r => pct(r.no_show_rate)], ["Normal (28 d)", r => pct(r.no_show_rate_prev_28d)],
+  ["Cancelled after start", r => num(r.cancelled_after_start)], ["No outcome yet", r => num(r.unresolved)],
+  ["No-show rate", r => pct(r.no_show_rate)], ["Usual level", r => pct(r.no_show_rate_prev_28d)],
   ["Lost vet-hours", r => r.lost_vet_hours == null ? "–" : r.lost_vet_hours.toFixed(1)], ["", r => flagsFor(r.clinic_name)]];
 document.getElementById("morning").innerHTML =
   `<thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>` +
