@@ -1,0 +1,14 @@
+# Secrets - never commit
+.env
+
+# Local Python environment
+.venv/
+__pycache__/
+
+# Local database and data dumps (case says: no data dumps)
+data/
+
+# The case description contains the API credentials and personal info
+heyra_case.html
+
+.DS_Store
