@@ -15,3 +15,6 @@ heyra_case.html
 
 # Generated dashboard (rebuilt on every run)
 output/
+
+# Editor / tool leftovers
+.Rhistory

@@ -1,14 +1,14 @@
-# Nordvet no-shows: a first slice
+# Nordvet: a first slice of their data platform
 
 A small pipeline that pulls appointments from the VetOne API, models them in SQL and produces
-a morning no-show view per clinic for Mette (Head of Operations).
+a morning no-show view per clinic for Nordvet.
 
 ```
 VetOne API ──► load.py ──► raw ──► staging ──► marts ──► dashboard.html  (demo)
   (Python)                  └────── DuckDB, plain SQL ──────┘ └─► Power BI   (Nordvet)
 ```
 
-What the data shows is in **[FINDINGS.md](FINDINGS.md)**.
+Main findings are listed in **[FINDINGS.md](FINDINGS.md)**.
 
 ## How to run it
 
@@ -23,8 +23,7 @@ cp .env.example .env              # then fill in VETONE_CLIENT_ID and VETONE_CLI
 open output/dashboard.html
 ```
 
-The first run does a full load (about 6 minutes, because of the API's rate limits). After that
-each run is incremental and takes a few seconds. `--full` forces a full reload.
+The first run does a full load, which takes about 6 minutes, because of the API's rate limits. After that each run is incremental and takes a few seconds. `--full` forces a full reload.
 
 The steps can also be run on their own: `python -m pipeline.load`, `pipeline.transform`, `pipeline.dashboard`.
 
@@ -46,9 +45,7 @@ sql/
 
 **Daily batch, not real-time.** No-shows are recorded in VetOne a median of 26 hours after the
 appointment, sometimes up to 5 days later. A real-time pipeline would show the same incomplete
-numbers faster, at higher cost and complexity. A run every morning (or hourly, which costs almost
-nothing extra) matches how fast the data actually becomes true. This answers Anders' request with
-data, and Karin's concern about cost.
+numbers faster, at higher cost and complexity. Running once each morning (or twice a day, if needed) matches how quickly outcomes are recorded in VetOne, and how often Nordvet needs the numbers.
 
 **Incremental loading with a watermark.** Each run asks for appointments updated since the
 newest `updated_at` already loaded, minus a 1-hour overlap, with `include_deleted=true`.
