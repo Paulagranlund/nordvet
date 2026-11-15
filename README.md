@@ -39,7 +39,28 @@ pipeline/
 sql/
   01_staging.sql    Types, names, removes deleted appointments
   02_marts.sql      Business logic: outcomes, daily clinic metrics, morning report, flags
+tests/
+  test_models.py    SQL models and loading on a small made-up dataset
+  test_api_client.py  API client against a fake API: pagination, retries, errors
+.github/workflows/
+  ci.yml            Lint + tests on every push and pull request
 ```
+
+## Tests and CI
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/ruff check .    # lint
+.venv/bin/pytest          # tests
+```
+
+The tests use made-up data and a fake API, so they need no credentials and no network.
+They check that each appointment gets the right outcome, that the daily counts and no-show
+rate are right, that deleted appointments are excluded, that days follow the clinic's local
+time, that re-loading a row replaces it instead of duplicating it, and that the API client
+follows pagination, retries on 429/500 and fails fast on 400.
+
+GitHub Actions runs the same lint and tests on every push to `main` and on every pull request.
 
 ## Design decisions
 
@@ -133,7 +154,6 @@ The documentation is short, so I profiled the API before building. Things it doe
 - **Real-time and streaming**, for the reasons above.
 - **Orchestration tooling** (Airflow, Data Factory and so on). One scheduled command is enough at this size.
 - **dbt.** The staging/marts structure follows the same idea, and dbt is a natural next step if the SQL grows.
-- **Unit tests and CI.** Data quality checks run on every load, but there are no tests for the Python code itself.
 - **Money.** There are no prices in the data, and I didn't invent them.
 - **Per-vet reporting**, see above.
 
