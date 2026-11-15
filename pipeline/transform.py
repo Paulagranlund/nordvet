@@ -40,14 +40,16 @@ CHECKS = {
 }
 
 
-def run():
-    con = duckdb.connect(str(DB_PATH))
-
+def build_models(con):
+    """Run every .sql file in sql/ in name order, on the given database connection."""
     for sql_file in sorted(SQL_DIR.glob("*.sql")):
         log.info("Running %s", sql_file.name)
         con.execute(sql_file.read_text())
 
-    errors = 0
+
+def run_checks(con):
+    """Run the data quality checks. Returns the names of failed 'error' checks."""
+    failed = []
     for name, (severity, query) in CHECKS.items():
         bad_rows = len(con.execute(query).fetchall())
         if bad_rows == 0:
@@ -56,10 +58,16 @@ def run():
             log.warning("CHECK WARN  %s (%d rows)", name, bad_rows)
         else:
             log.error("CHECK FAIL  %s (%d rows)", name, bad_rows)
-            errors += 1
+            failed.append(name)
+    return failed
 
+
+def run():
+    con = duckdb.connect(str(DB_PATH))
+    build_models(con)
+    failed = run_checks(con)
     con.close()
-    if errors:
+    if failed:
         raise SystemExit(1)
 
 

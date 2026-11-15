@@ -98,7 +98,7 @@ def load_json_rows(con, table, rows, columns):
 
 
 def run(full=False):
-    started = dt.datetime.now(dt.timezone.utc)
+    started = dt.datetime.now(dt.UTC)
     DB_PATH.parent.mkdir(exist_ok=True)
     con = duckdb.connect(str(DB_PATH))
     create_tables(con)
@@ -109,7 +109,7 @@ def run(full=False):
         mode, updated_since = "full", "1970-01-01T00:00:00+00:00"  # = everything
     else:
         mode = "incremental"
-        updated_since = (watermark - OVERLAP).astimezone(dt.timezone.utc).isoformat()
+        updated_since = (watermark - OVERLAP).astimezone(dt.UTC).isoformat()
     log.info("Mode: %s, fetching appointments updated since %s", mode, updated_since)
 
     rows_fetched = 0
