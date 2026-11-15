@@ -44,6 +44,7 @@ tests/
   test_api_client.py  API client against a fake API: pagination, retries, errors
 .github/workflows/
   ci.yml            Lint + tests on every push and pull request
+  daily.yml         Runs the pipeline every morning (demo of scheduling)
 ```
 
 ## Tests and CI
@@ -61,6 +62,21 @@ time, that re-loading a row replaces it instead of duplicating it, and that the 
 follows pagination, retries on 429/500 and fails fast on 400.
 
 GitHub Actions runs the same lint and tests on every push to `main` and on every pull request.
+
+## Daily run on GitHub Actions (demo)
+
+`.github/workflows/daily.yml` runs `python -m pipeline.run` every morning at 05:00 UTC
+(06:00 Danish time), and on demand with **Actions → Daily pipeline → Run workflow**.
+
+- GitHub's runner starts empty, so the DuckDB file is kept between runs in the Actions cache.
+  Runs stay incremental, and if the cache is missing the pipeline does a full load by itself.
+  The cache is only saved after a successful run.
+- Credentials come from repository secrets (`VETONE_BASE_URL`, `VETONE_CLIENT_ID`, `VETONE_CLIENT_SECRET`).
+- The dashboard is attached to each run as an artifact (kept 30 days).
+
+This is a demo of scheduling, so the pipeline runs without my laptop. For Nordvet, the same
+command would run in an Azure Function and Power BI would replace the HTML dashboard (see below).
+The VetOne credentials expire on 26 November 2026, after which this workflow should be disabled.
 
 ## Design decisions
 
