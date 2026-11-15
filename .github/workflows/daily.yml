@@ -1,0 +1,61 @@
+# Daily run: load new data, rebuild the models and the dashboard.
+# A demo of scheduling. For Nordvet, the same `python -m pipeline.run`
+# would run in an Azure Function, and Power BI would replace the dashboard.
+name: Daily pipeline
+
+on:
+  schedule:
+    - cron: "0 5 * * *"    # every day 05:00 UTC = 06:00 Danish winter time
+  workflow_dispatch:        # adds a "Run workflow" button on GitHub
+
+# never run two at the same time (they would fight over the same database)
+concurrency:
+  group: daily-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # GitHub's machine starts empty every time. The database is kept between
+      # runs in GitHub's cache (private: only this repo's workflows can read it),
+      # so each run is incremental. If no cache exists, the pipeline does a full load.
+      - name: Restore database from cache
+        uses: actions/cache/restore@v6
+        with:
+          path: data/nordvet.duckdb
+          key: nordvet-db-${{ github.run_id }}
+          restore-keys: nordvet-db-
+
+      - name: Run pipeline
+        run: python -m pipeline.run
+        env:
+          VETONE_BASE_URL: ${{ secrets.VETONE_BASE_URL }}
+          VETONE_CLIENT_ID: ${{ secrets.VETONE_CLIENT_ID }}
+          VETONE_CLIENT_SECRET: ${{ secrets.VETONE_CLIENT_SECRET }}
+
+      # Only reached if the pipeline succeeded, so a failed run never saves bad data
+      - name: Save database to cache
+        uses: actions/cache/save@v6
+        with:
+          path: data/nordvet.duckdb
+          key: nordvet-db-${{ github.run_id }}
+
+      - name: Attach dashboard to this run
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard
+          path: output/dashboard.html
+          retention-days: 30
