@@ -18,3 +18,7 @@ output/
 
 # Editor / tool leftovers
 .Rhistory
+
+# Test and lint caches (created automatically by pytest and ruff)
+.pytest_cache/
+.ruff_cache/
