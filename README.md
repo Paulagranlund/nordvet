@@ -4,8 +4,8 @@ A small pipeline that pulls appointments from the VetOne API, models them in SQL
 a morning no-show view per clinic for Nordvet.
 
 ```
-VetOne API ──► load.py ──► raw ──► staging ──► marts ──► dashboard.html  (demo)
-  (Python)                  └────── DuckDB, plain SQL ──────┘ └─► Power BI   (Nordvet)
+VetOne API ──► load.py ──► raw ──► staging ──► marts ──► dashboard.html  (this demo)
+  (Python)                  └────── DuckDB, plain SQL ──────┘ └─► Power BI   (proposed for Nordvet)
 ```
 
 Main findings are listed in **[FINDINGS.md](FINDINGS.md)**.
@@ -39,6 +39,8 @@ pipeline/
 sql/
   01_staging.sql    Types, names, removes deleted appointments
   02_marts.sql      Business logic: outcomes, daily clinic metrics, morning report, flags
+analysis/
+  findings.py       Reproduces every number in FINDINGS.md
 tests/
   test_models.py    SQL models and loading on a small made-up dataset
   test_api_client.py  API client against a fake API: pagination, retries, errors
@@ -63,20 +65,9 @@ follows pagination, retries on 429/500 and fails fast on 400.
 
 GitHub Actions runs the same lint and tests on every push to `main` and on every pull request.
 
-## Daily run on GitHub Actions (demo)
+## Daily run (demo)
 
-`.github/workflows/daily.yml` runs `python -m pipeline.run` every morning at 05:00 UTC
-(06:00 Danish time), and on demand with **Actions → Daily pipeline → Run workflow**.
-
-- GitHub's runner starts empty, so the DuckDB file is kept between runs in the Actions cache.
-  Runs stay incremental, and if the cache is missing the pipeline does a full load by itself.
-  The cache is only saved after a successful run.
-- Credentials come from repository secrets (`VETONE_BASE_URL`, `VETONE_CLIENT_ID`, `VETONE_CLIENT_SECRET`).
-- The dashboard is attached to each run as an artifact (kept 30 days).
-
-This is a demo of scheduling, so the pipeline runs without my laptop. For Nordvet, the same
-command would run in an Azure Function and Power BI would replace the HTML dashboard (see below).
-The VetOne credentials expire on 26 November 2026, after which this workflow should be disabled.
+`.github/workflows/daily.yml` runs the pipeline every morning and on demand (Actions → Daily pipeline → Run workflow). The database is kept between runs in the Actions cache so runs stay incremental, credentials come from repository secrets, and the dashboard is attached to each run. It demonstrates scheduling only; for Nordvet the same command would run in an Azure Function with Power BI (see below).
 
 ## Design decisions
 
@@ -87,8 +78,7 @@ numbers faster, at higher cost and complexity. Running once each morning (or twi
 **Incremental loading with a watermark.** Each run asks for appointments updated since the
 newest `updated_at` already loaded, minus a 1-hour overlap, with `include_deleted=true`.
 Status changes (including late no-shows) and deletions both update `updated_at`, so they arrive
-in the next run. I checked that `updated_at` is not backdated by comparing two snapshots taken
-14 hours apart. The watermark is derived from the data itself, so it can never get out of sync.
+in the next run. `updated_at` was verified not to be backdated by comparing two snapshots taken 14 hours apart. The watermark is derived from the data itself, so it can never get out of sync.
 
 **Idempotent, all-or-nothing loads.** Rows are upserted on `id` (`INSERT OR REPLACE`), so
 re-running is harmless. Everything is extracted first and written in a single transaction: the
@@ -100,20 +90,20 @@ be changed and rebuilt without calling the client's API again. Staging only clea
 deleted rows). Marts hold every business rule in one place: what counts as a no-show, how the rate
 is calculated, and when a clinic is flagged.
 
-**Plain SQL, DuckDB locally.** Emil's team is two people who know SQL and Power BI, so all logic
+**Plain SQL, DuckDB locally.** IT team is two people who know SQL and Power BI, so all logic
 they would maintain is in `.sql` files. DuckDB runs the demo with no server. The SQL is standard
 apart from DuckDB's `count(*) FILTER (...)` and `AT TIME ZONE` syntax, which translate directly
 to `SUM(CASE ...)` and `AT TIME ZONE` in Azure SQL.
 
 **Views, not tables.** At about 70,000 rows, views are instant and always current. With much more
-data, I would materialise the marts as tables, rebuilt after each load.
+data, the marts should be materialised as tables, rebuilt after each load.
 
 **Data quality checks on every run.** Duplicate ids, unknown clinics or unknown statuses stop the
 pipeline, so the dashboard is never built on data we don't understand. Stale data, or
 appointments with no outcome after 7 days, log a warning. Each step exits non-zero on failure,
 so a scheduler can alert.
 
-**Clinic level only, no per-vet view.** The data has `vet_id`, and I used it to investigate
+**Clinic level only, no per-vet view.** The data has `vet_id`, and is used to investigate
 Odense C. A dashboard ranking individual vets would be sensitive and invites blame for something
 (owners not showing up) that is more likely a process issue.
 
@@ -129,9 +119,7 @@ Odense C. A dashboard ranking individual vets would be sensitive and invites bla
 | Last working day | the latest past date with appointments, so a Monday report shows Saturday |
 | Flags | *Above normal*: ≥ 2 no-shows and ≥ 8 points above the clinic's previous 28 days. *Persistently high*: 4-week rate ≥ 1.5× chain. *Getting worse*: 4-week rate ≥ 5 points above the 4 weeks before |
 
-## What I found out about the API
-
-The documentation is short, so I profiled the API before building. Things it doesn't say:
+## API findings
 
 - The token expires after about an hour, so the client refreshes it.
 - It rate-limits with `429` and a `Retry-After` header, and returns occasional `500`s. The client waits and retries, and also paces requests at 0.5 s.
@@ -144,29 +132,26 @@ The documentation is short, so I profiled the API before building. Things it doe
 
 ## Assumptions
 
-**Given** (by the case or the docs)
+**Given**
 - All clinics use VetOne, and the API is the only source.
 - Nordvet is on Microsoft 365 and Azure, and the team that will run this knows SQL and Power BI.
 
-**Observed** (verified in the data)
+**Observed** 
 - `updated_at` changes on every status change and deletion, and is not backdated.
 - Each service has a fixed duration (consultation 20 min, vaccination and follow-up 15, dental 45, surgery 90).
 - Each `vet_id` belongs to exactly one clinic.
 - Every clinic records no-shows equally late (median 24–28 hours), so comparisons between clinics are fair.
 
-**Assumed** (not verifiable from the data)
+**Assumed** 
 - `deleted_at` means the appointment should not count at all, for example because it was booked by mistake.
 - `vet_id` is a veterinarian.
-- A `cancelled` appointment with `cancelled_at` after the start time is not a no-show. This is
-  a one-line change in `sql/02_marts.sql` if Nordvet says otherwise.
+- A `cancelled` appointment with `cancelled_at` after the start time is not a no-show. 
 - Booked duration is a fair measure of lost capacity. There are no prices in the data, so money
   is lost vet-hours × whatever a vet-hour is worth to Nordvet.
 
 ## Left out on purpose
 
-- **Change history.** Only the latest version of each appointment is kept. A history table
-  (every version, SCD2-style) would show exactly *when* no-shows get registered and allow
-  reproducing old reports. It is the first thing I would add.
+- **Change history.** Only the latest version of each appointment is kept. A history table would show exactly when no-shows get registered and allow reproducing old reports. This would be a priority when doing a bigger report. 
 - **Real-time and streaming**, for the reasons above.
 - **Orchestration tooling** (Airflow, Data Factory and so on). One scheduled command is enough at this size.
 - **dbt.** The staging/marts structure follows the same idea, and dbt is a natural next step if the SQL grows.
@@ -177,12 +162,12 @@ The documentation is short, so I profiled the API before building. Things it doe
 
 ```
 Azure Function (Python, timer trigger, daily 06:00)
-   │  runs pipeline/load.py; secrets from Azure Key Vault
+   │  runs pipeline.run (load + SQL models + checks); secrets from Azure Key Vault
    ▼
 Azure SQL Database ── raw / staging / marts schemas (the SQL files, adapted)
    │
    ▼
-Power BI (Nordvet's M365 tenant) ── scheduled refresh after the load; Mette gets it on her phone
+Power BI (Nordvet's M365 tenant) ── scheduled refresh after the load
 ```
 
 - **Azure Function, consumption plan:** costs practically nothing at one short run a day. It needs no servers to look after.
@@ -191,8 +176,3 @@ Power BI (Nordvet's M365 tenant) ── scheduled refresh after the load; Mette 
 - **Power BI** replaces `dashboard.html`. The marts are already shaped for it: one fact table and one clinic dimension, plus the report views.
 - Total running cost should be a small fraction of the cost of a single day's no-shows.
 
-**If things changed**
-
-- **Much more data:** materialise the marts, partition by date, and consider dbt.
-- **Truly real-time needs:** ask VetOne for webhooks rather than polling faster.
-- **More sources** (for example finance data for real prices): add loaders next to `load.py`, keep the same layers, and possibly move to Microsoft Fabric.
